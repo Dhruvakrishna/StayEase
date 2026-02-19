@@ -1,0 +1,106 @@
+openapi: 3.0.3
+info:
+  title: StayEase Booking API
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+paths:
+  /v1/bookings:
+    get:
+      summary: List bookings for current user
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Bookings list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingListResponse'
+    post:
+      summary: Create booking
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateBookingRequest' }
+      responses:
+        '201':
+          description: Booking created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreateBookingResponse' }
+        '400': { description: Validation error }
+        '401': { description: Unauthorized }
+        '500': { description: Server error }
+  /v1/bookings/{bookingId}/cancel:
+    post:
+      summary: Cancel a booking
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: bookingId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Booking cancelled
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CancelBookingResponse' }
+        '404': { description: Not found }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    CreateBookingRequest:
+      type: object
+      required: [stayId, stayName, checkInEpochDay, checkOutEpochDay, guests, rooms, roomType, currency]
+      properties:
+        stayId: { type: integer, format: int64 }
+        stayName: { type: string }
+        checkInEpochDay: { type: integer, format: int64 }
+        checkOutEpochDay: { type: integer, format: int64 }
+        guests: { type: integer }
+        rooms: { type: integer }
+        roomType: { type: string }
+        specialRequests: { type: string, nullable: true }
+        currency: { type: string, example: USD }
+    CreateBookingResponse:
+      type: object
+      required: [bookingId, confirmationCode, status, totalAmount, currency, createdAtEpochMs]
+      properties:
+        bookingId: { type: string }
+        confirmationCode: { type: string }
+        status: { type: string, example: CONFIRMED }
+        totalAmount: { type: number, format: double }
+        currency: { type: string }
+        createdAtEpochMs: { type: integer, format: int64 }
+    CancelBookingResponse:
+      type: object
+      required: [bookingId, status]
+      properties:
+        bookingId: { type: string }
+        status: { type: string, example: CANCELLED }
+    Booking:
+      type: object
+      required: [bookingId, stayId, stayName, status, totalAmount, currency, createdAtEpochMs]
+      properties:
+        bookingId: { type: string }
+        stayId: { type: integer, format: int64 }
+        stayName: { type: string }
+        status: { type: string }
+        totalAmount: { type: number, format: double }
+        currency: { type: string }
+        confirmationCode: { type: string, nullable: true }
+        createdAtEpochMs: { type: integer, format: int64 }
+    BookingListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Booking' }
