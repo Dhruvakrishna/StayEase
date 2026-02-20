@@ -8,4 +8,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "StayEase"
 include(":app", ":core", ":domain", ":data")
-include(":feature:auth", ":feature:hotels", ":feature:details", ":feature:bookings", ":feature:asyncdemo")
+include(":feature:auth", ":feature:hotels", ":feature:details", ":feature:bookings", ":feature:customsearch")

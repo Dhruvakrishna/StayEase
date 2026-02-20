@@ -44,6 +44,15 @@ class StaysViewModel @Inject constructor(
         viewModelScope.launch {
             cmsRepository.refreshContent()
         }
+        
+        // Real-time location tracking
+        locationProvider.observeLocation()
+            .onEach { loc -> 
+                if (loc != null) {
+                    _userLocation.value = loc
+                }
+            }
+            .launchIn(viewModelScope)
     }
 
     @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
@@ -55,10 +64,11 @@ class StaysViewModel @Inject constructor(
     ) { loc, rad, query, category ->
         DataParams(loc, rad, query, category)
     }
-    .debounce(300) // Debounce rapid parameter changes to reduce API calls
-    .distinctUntilChanged() // Only emit when params actually change
+    .debounce(300)
+    .distinctUntilChanged()
     .flatMapLatest { params ->
-        val pivot = params.location ?: GeoPoint(41.8781, -87.6298) // Default to Chicago
+        // Default to a fallback if location isn't available yet
+        val pivot = params.location ?: GeoPoint(41.8781, -87.6298) 
         getStays(pivot = pivot, radiusMeters = params.radius, pageSize = 20)
             .map { pagingData ->
                 pagingData.filter { stay ->
@@ -75,10 +85,6 @@ class StaysViewModel @Inject constructor(
             }
     }.cachedIn(viewModelScope)
 
-    fun updateLocation(location: GeoPoint) {
-        _userLocation.value = location
-    }
-
     fun updateRadius(newRadius: Int) {
         if (_radius.value != newRadius) {
             _radius.value = newRadius
@@ -93,6 +99,10 @@ class StaysViewModel @Inject constructor(
 
     fun onCategorySelected(category: String?) {
         _selectedCategory.value = if (_selectedCategory.value == category) null else category
+    }
+
+    fun updateLocation(location: GeoPoint) {
+        _userLocation.value = location
     }
 
     private data class DataParams(

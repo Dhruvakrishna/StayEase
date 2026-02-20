@@ -8,7 +8,9 @@ import com.example.stayease.core.telemetry.Telemetry
 import com.example.stayease.data.auth.*
 import com.example.stayease.data.local.AppDatabase
 import com.example.stayease.data.remote.api.BookingApi
+import com.example.stayease.data.remote.api.EventsApi
 import com.example.stayease.data.remote.api.OverpassApi
+import com.example.stayease.data.remote.api.WikimediaApi
 import com.example.stayease.data.repository.*
 import com.example.stayease.domain.repository.*
 import com.example.stayease.telemetry.FirebaseTelemetry
@@ -28,6 +30,14 @@ import javax.inject.Singleton
 @Qualifier
 @Retention(AnnotationRetention.BINARY)
 annotation class OverpassRetrofit
+
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class WikimediaRetrofit
+
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class TicketmasterRetrofit
 
 @Qualifier
 @Retention(AnnotationRetention.BINARY)
@@ -81,8 +91,6 @@ object AppModule {
   @OverpassRetrofit
   @Provides @Singleton
   fun overpassRetrofit(@PublicOkHttp client: OkHttpClient, moshi: Moshi): Retrofit {
-    // Optimization: Add Gzip and better connection management is already handled by OkHttp.
-    // We'll ensure the client is optimized.
     return Retrofit.Builder()
       .baseUrl(BuildConfig.OVERPASS_BASE_URL)
       .client(client)
@@ -91,6 +99,39 @@ object AppModule {
   }
 
   @Provides @Singleton fun overpassApi(@OverpassRetrofit retrofit: Retrofit): OverpassApi = retrofit.create(OverpassApi::class.java)
+
+  @WikimediaRetrofit
+  @Provides @Singleton
+  fun wikimediaRetrofit(@PublicOkHttp client: OkHttpClient, moshi: Moshi): Retrofit {
+    return Retrofit.Builder()
+      .baseUrl("https://commons.wikimedia.org/w/")
+      .client(client)
+      .addConverterFactory(MoshiConverterFactory.create(moshi))
+      .build()
+  }
+
+  @Provides @Singleton fun wikimediaApi(@WikimediaRetrofit retrofit: Retrofit): WikimediaApi = retrofit.create(WikimediaApi::class.java)
+
+  @TicketmasterRetrofit
+  @Provides @Singleton
+  fun ticketmasterRetrofit(@PublicOkHttp client: OkHttpClient, moshi: Moshi): Retrofit {
+    val authClient = client.newBuilder()
+        .addInterceptor { chain ->
+            val original = chain.request()
+            val url = original.url.newBuilder()
+                .addQueryParameter("apikey", BuildConfig.TICKETMASTER_API_KEY)
+                .build()
+            chain.proceed(original.newBuilder().url(url).build())
+        }.build()
+    
+    return Retrofit.Builder()
+      .baseUrl("https://app.ticketmaster.com/discovery/v2/")
+      .client(authClient)
+      .addConverterFactory(MoshiConverterFactory.create(moshi))
+      .build()
+  }
+
+  @Provides @Singleton fun eventsApi(@TicketmasterRetrofit retrofit: Retrofit): EventsApi = retrofit.create(EventsApi::class.java)
 
   @BookingRetrofit
   @Provides @Singleton
@@ -107,13 +148,18 @@ object AppModule {
   fun db(@ApplicationContext ctx: Context): AppDatabase =
     Room.databaseBuilder(ctx, AppDatabase::class.java, "stayease.db")
       .fallbackToDestructiveMigration()
-      .setJournalMode(androidx.room.RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING) // Performance: WAL mode
+      .setJournalMode(androidx.room.RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
       .build()
 
   @Provides @Singleton fun stayRepository(api: OverpassApi, db: AppDatabase): StayRepository = StayRepositoryImpl(api, db)
   @Provides @Singleton fun bookingRemote(api: BookingApi): BookingRemoteDataSource = BookingRemoteDataSourceImpl(api)
   @Provides @Singleton fun bookingRepository(db: AppDatabase, remote: BookingRemoteDataSource, telemetry: Telemetry): BookingRepository =
     BookingRepositoryImpl(db.bookingDao(), remote, telemetry)
+
+  @Provides @Singleton fun poiRepository(api: OverpassApi, wikimediaApi: WikimediaApi): PointOfInterestRepository = 
+    PointOfInterestRepositoryImpl(api, wikimediaApi)
+
+  @Provides @Singleton fun eventsRepository(api: EventsApi): EventsRepository = EventsRepositoryImpl(api)
 
   @Provides @Singleton fun userRepository(db: AppDatabase): UserRepository = UserRepositoryImpl(db.userDao())
   @Provides @Singleton fun cmsRepository(): CmsRepository = CmsRepositoryImpl()

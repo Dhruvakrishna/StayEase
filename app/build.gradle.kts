@@ -54,6 +54,7 @@ android {
       buildConfigField("Boolean", "FIREBASE_ENABLED", hasGoogleServices.toString())
       buildConfigField("String", "OVERPASS_BASE_URL", "\"https://overpass-api.de/\"")
       buildConfigField("String", "BOOKING_BASE_URL", "\"http://10.0.2.2:4010/\"")
+      buildConfigField("String", "TICKETMASTER_API_KEY", "\"YOUR_TICKETMASTER_API_KEY\"")
     }
     create("stage") {
       dimension = "env"
@@ -63,6 +64,7 @@ android {
       buildConfigField("Boolean", "FIREBASE_ENABLED", hasGoogleServices.toString())
       buildConfigField("String", "OVERPASS_BASE_URL", "\"https://overpass-api.de/\"")
       buildConfigField("String", "BOOKING_BASE_URL", "\"http://10.0.2.2:4010/\"")
+      buildConfigField("String", "TICKETMASTER_API_KEY", "\"YOUR_TICKETMASTER_API_KEY\"")
     }
     create("prod") {
       dimension = "env"
@@ -70,6 +72,7 @@ android {
       buildConfigField("Boolean", "FIREBASE_ENABLED", hasGoogleServices.toString())
       buildConfigField("String", "OVERPASS_BASE_URL", "\"https://overpass-api.de/\"")
       buildConfigField("String", "BOOKING_BASE_URL", "\"https://api.example.com/\"")
+      buildConfigField("String", "TICKETMASTER_API_KEY", "\"YOUR_TICKETMASTER_API_KEY\"")
     }
   }
 
@@ -87,7 +90,7 @@ dependencies {
   implementation(project(":feature:hotels"))
   implementation(project(":feature:details"))
   implementation(project(":feature:bookings"))
-  implementation(project(":feature:asyncdemo"))
+  implementation(project(":feature:customsearch"))
 
   val composeBom = platform("androidx.compose:compose-bom:2025.01.00")
   implementation(composeBom)

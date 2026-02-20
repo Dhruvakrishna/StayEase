@@ -8,6 +8,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -22,6 +23,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -29,6 +31,8 @@ fun ProfileScreen(onBack: () -> Unit, vm: ProfileViewModel = hiltViewModel()) {
     val user by vm.user.collectAsState()
     var showEditNameDialog by remember { mutableStateOf(false) }
     var newName by remember { mutableStateOf("") }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     if (showEditNameDialog) {
         AlertDialog(
@@ -64,7 +68,8 @@ fun ProfileScreen(onBack: () -> Unit, vm: ProfileViewModel = hiltViewModel()) {
                     }
                 }
             )
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         Column(
             modifier = Modifier
@@ -147,9 +152,13 @@ fun ProfileScreen(onBack: () -> Unit, vm: ProfileViewModel = hiltViewModel()) {
                     )
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                     ProfileMenuItem(
-                        icon = Icons.Default.Email,
-                        title = "Email Notifications",
-                        onClick = { /* TODO */ }
+                        icon = Icons.Default.Notifications,
+                        title = "Notifications Settings",
+                        onClick = {
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Notifications settings coming soon!")
+                            }
+                        }
                     )
                 }
             }
@@ -157,7 +166,10 @@ fun ProfileScreen(onBack: () -> Unit, vm: ProfileViewModel = hiltViewModel()) {
             Spacer(Modifier.weight(1f))
             
             Button(
-                onClick = { /* Sign Out logic if not in drawer */ },
+                onClick = {
+                    // This should probably call vm.signOut() if it existed, or we handle it via the NavHost
+                    onBack()
+                },
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer, contentColor = MaterialTheme.colorScheme.onErrorContainer),
                 shape = RoundedCornerShape(12.dp)

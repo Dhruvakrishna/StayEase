@@ -1,6 +1,11 @@
 package com.example.stayease.feature.details
 
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -12,21 +17,23 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
+import com.example.stayease.domain.model.PointOfInterest
 import com.example.stayease.domain.model.Review
 import java.text.SimpleDateFormat
 import java.util.*
@@ -40,11 +47,13 @@ fun StayDetailsScreen(
 ) {
     val state by vm.state.collectAsState()
     val scrollState = rememberScrollState()
+    val context = LocalContext.current
 
     val datePickerState = rememberDatePickerState(
         initialSelectedDateMillis = state.checkInEpochDay * 24 * 60 * 60 * 1000
     )
     var showDatePicker by remember { mutableStateOf(false) }
+    var selectedPoiForTrip by remember { mutableStateOf<PointOfInterest?>(null) }
 
     if (showDatePicker) {
         DatePickerDialog(
@@ -65,19 +74,40 @@ fun StayDetailsScreen(
         }
     }
 
+    if (selectedPoiForTrip != null) {
+        AlertDialog(
+            onDismissRequest = { selectedPoiForTrip = null },
+            title = { Text("Add to Trip") },
+            text = {
+                Column {
+                    Text("Select a trip to add ${selectedPoiForTrip?.name}:")
+                    Spacer(Modifier.height(8.dp))
+                    state.trips.forEach { trip ->
+                        ListItem(
+                            headlineContent = { Text(trip.title) },
+                            modifier = Modifier.clickable {
+                                vm.addItemToTrip(selectedPoiForTrip!!, trip.id)
+                                selectedPoiForTrip = null
+                            }
+                        )
+                    }
+                    if (state.trips.isEmpty()) {
+                        Text("No active trips found. Create one in 'Trip Plans'.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { selectedPoiForTrip = null }) { Text("Cancel") } }
+        )
+    }
+
     if (state.message != null) {
         AlertDialog(
             onDismissRequest = { vm.clearMessage() },
             confirmButton = {
-                TextButton(onClick = {
-                    vm.clearMessage()
-                    onBookings()
-                }) { Text("View bookings") }
+                TextButton(onClick = { vm.clearMessage() }) { Text("OK") }
             },
-            dismissButton = {
-                TextButton(onClick = { vm.clearMessage() }) { Text("Close") }
-            },
-            title = { Text("Status") },
+            title = { Text("Information") },
             text = { Text(state.message ?: "") }
         )
     }
@@ -85,43 +115,43 @@ fun StayDetailsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Stay Details") },
+                title = { Text(state.stay?.name ?: "Details", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
-                )
+                actions = {
+                    IconButton(onClick = { /* Share */ }) {
+                        Icon(Icons.Default.Share, contentDescription = "Share")
+                    }
+                }
             )
         }
     ) { padding ->
         Box(Modifier.padding(padding).fillMaxSize()) {
-            when {
-                state.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                }
-                state.error != null -> Column(Modifier.padding(16.dp)) {
-                    Text(state.error ?: "Error", color = MaterialTheme.colorScheme.error)
-                    Button(onClick = { /* Retry */ }) { Text("Retry") }
-                }
-                state.stay != null -> {
+            AnimatedContent(
+                targetState = state.loading,
+                transitionSpec = { fadeIn(tween(500)) togetherWith fadeOut(tween(500)) }
+            ) { loading ->
+                if (loading) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
+                } else if (state.stay != null) {
                     val stay = state.stay!!
                     Column(
                         modifier = Modifier
                             .verticalScroll(scrollState)
                             .fillMaxSize()
                     ) {
-                        // Image Gallery with Pager
-                        if (stay.imageUrls.isNotEmpty()) {
-                            val pagerState = rememberPagerState(pageCount = { stay.imageUrls.size })
-                            Box {
+                        // Enhanced Image Gallery
+                        Box {
+                            if (stay.imageUrls.isNotEmpty()) {
+                                val pagerState = rememberPagerState(pageCount = { stay.imageUrls.size })
                                 HorizontalPager(
                                     state = pagerState,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(300.dp)
+                                    modifier = Modifier.fillMaxWidth().height(320.dp)
                                 ) { page ->
                                     AsyncImage(
                                         model = stay.imageUrls[page],
@@ -130,128 +160,91 @@ fun StayDetailsScreen(
                                         contentScale = ContentScale.Crop
                                     )
                                 }
-                                // Page Indicator
+                                // Gradient Overlay
+                                Box(
+                                    Modifier.fillMaxWidth().height(80.dp).align(Alignment.BottomCenter)
+                                        .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f))))
+                                )
+                                // Indicator
                                 Row(
-                                    Modifier
-                                        .height(50.dp)
-                                        .fillMaxWidth()
-                                        .align(Alignment.BottomCenter),
+                                    Modifier.padding(16.dp).align(Alignment.BottomCenter),
                                     horizontalArrangement = Arrangement.Center
                                 ) {
                                     repeat(stay.imageUrls.size) { iteration ->
                                         val color = if (pagerState.currentPage == iteration) Color.White else Color.White.copy(alpha = 0.5f)
-                                        Box(
-                                            modifier = Modifier
-                                                .padding(4.dp)
-                                                .clip(CircleShape)
-                                                .background(color)
-                                                .size(8.dp)
-                                        )
+                                        Box(Modifier.padding(3.dp).clip(CircleShape).background(color).size(if (pagerState.currentPage == iteration) 10.dp else 6.dp))
                                     }
                                 }
                             }
                         }
 
-                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                            // Header Information
-                            Column {
-                                Text(
-                                    stay.name,
-                                    style = MaterialTheme.typography.headlineMedium,
-                                    fontWeight = FontWeight.ExtraBold
-                                )
-                                Spacer(Modifier.height(4.dp))
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.Star, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color(0xFFFFB300))
-                                    Spacer(Modifier.width(4.dp))
-                                    Text(
-                                        "${stay.rating ?: "N/A"} • ${stay.category.replaceFirstChar { it.uppercase() }}",
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        fontWeight = FontWeight.Medium
-                                    )
+                        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+                            // Header & Weather
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(stay.name, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
+                                    Text(stay.address ?: "", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                if (state.weatherTemp != null) {
+                                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
+                                        Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.WbSunny, contentDescription = null, modifier = Modifier.size(16.dp))
+                                            Spacer(Modifier.width(4.dp))
+                                            Text("${state.weatherTemp?.toInt()}°C", fontWeight = FontWeight.Bold)
+                                        }
+                                    }
                                 }
                             }
 
-                            // Amenities Section
-                            if (stay.amenities.isNotEmpty()) {
+                            // Travel Companion POIs
+                            if (state.pois.isNotEmpty()) {
                                 Column {
-                                    Text("Top Amenities", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                    Spacer(Modifier.height(8.dp))
-                                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        items(stay.amenities) { amenity ->
-                                            SuggestionChip(
-                                                onClick = { },
-                                                label = { Text(amenity) },
-                                                shape = RoundedCornerShape(12.dp)
+                                    Text("Nearby Attractions", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                                    Spacer(Modifier.height(12.dp))
+                                    LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                                        items(state.pois) { poi ->
+                                            PoiCard(
+                                                poi = poi,
+                                                onAdd = { selectedPoiForTrip = poi },
+                                                onNavigate = {
+                                                    val gmmIntentUri = Uri.parse("google.navigation:q=${poi.location.lat},${poi.location.lon}")
+                                                    val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
+                                                    mapIntent.setPackage("com.google.android.apps.maps")
+                                                    context.startActivity(mapIntent)
+                                                }
                                             )
                                         }
                                     }
                                 }
                             }
 
-                            HorizontalDivider()
-
-                            // Booking Card
-                            Text("Book Your Stay", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            
+                            // Booking Info
+                            Text("Booking Details", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                             OutlinedCard(
                                 onClick = { showDatePicker = true },
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(16.dp)
                             ) {
-                                Row(
-                                    Modifier.padding(16.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(Icons.Default.DateRange, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.CalendarToday, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                                     Spacer(Modifier.width(16.dp))
                                     Column {
-                                        Text("Check-in Date", style = MaterialTheme.typography.labelMedium)
-                                        Text(
-                                            SimpleDateFormat("EEE, MMM d, yyyy", Locale.getDefault())
-                                                .format(Date(state.checkInEpochDay * 24 * 60 * 60 * 1000)),
-                                            style = MaterialTheme.typography.bodyLarge,
-                                            fontWeight = FontWeight.Bold
-                                        )
+                                        Text("Check-in", style = MaterialTheme.typography.labelMedium)
+                                        Text(SimpleDateFormat("EEE, MMM d", Locale.getDefault()).format(Date(state.checkInEpochDay * 24 * 60 * 60 * 1000)), fontWeight = FontWeight.Bold)
                                     }
+                                    Spacer(Modifier.weight(1f))
+                                    Text("${state.nights} nights", style = MaterialTheme.typography.bodyMedium)
                                 }
                             }
-
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                                Counter(label = "Nights", value = state.nights, onIncrement = vm::incNights, onDecrement = vm::decNights, modifier = Modifier.weight(1f))
-                                Counter(label = "Guests", value = state.guests, onIncrement = vm::incGuests, onDecrement = vm::decGuests, modifier = Modifier.weight(1f))
-                            }
-
-                            // User Reviews
-                            if (stay.reviews.isNotEmpty()) {
-                                HorizontalDivider()
-                                Column {
-                                    Text("User Reviews", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                    Spacer(Modifier.height(12.dp))
-                                    stay.reviews.forEach { review ->
-                                        ReviewItem(review)
-                                        Spacer(Modifier.height(12.dp))
-                                    }
-                                }
-                            }
-
-                            Spacer(Modifier.height(8.dp))
 
                             Button(
                                 onClick = vm::book,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(60.dp),
+                                modifier = Modifier.fillMaxWidth().height(56.dp),
                                 shape = RoundedCornerShape(16.dp)
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text("Reserve Now", style = MaterialTheme.typography.titleLarge)
-                                    Spacer(Modifier.weight(1f))
-                                    Text("$${stay.nightlyPriceUsdEstimate * state.nights}", style = MaterialTheme.typography.titleLarge)
-                                }
+                                Text("Book for $${stay.nightlyPriceUsdEstimate * state.nights}", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                             }
-                            
-                            Spacer(Modifier.height(32.dp))
+                            Spacer(Modifier.height(20.dp))
                         }
                     }
                 }
@@ -261,51 +254,28 @@ fun StayDetailsScreen(
 }
 
 @Composable
-fun ReviewItem(review: Review) {
+fun PoiCard(poi: PointOfInterest, onAdd: () -> Unit, onNavigate: () -> Unit) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
-        shape = RoundedCornerShape(12.dp)
+        modifier = Modifier.width(200.dp),
+        shape = RoundedCornerShape(20.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Column(Modifier.padding(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(review.author, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
-                Spacer(Modifier.weight(1f))
-                repeat(review.rating.toInt()) {
-                    Icon(Icons.Default.Star, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color(0xFFFFB300))
+        Column {
+            Box(Modifier.fillMaxWidth().height(100.dp).background(MaterialTheme.colorScheme.secondaryContainer)) {
+                Icon(Icons.Default.Place, contentDescription = null, modifier = Modifier.align(Alignment.Center).size(32.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
+            }
+            Column(Modifier.padding(12.dp)) {
+                Text(poi.name, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(poi.category, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(8.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilledIconButton(onClick = onAdd, modifier = Modifier.size(36.dp), colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.primary)) {
+                        Icon(Icons.Default.Add, contentDescription = "Add", modifier = Modifier.size(18.dp))
+                    }
+                    OutlinedIconButton(onClick = onNavigate, modifier = Modifier.size(36.dp)) {
+                        Icon(Icons.Default.Navigation, contentDescription = "Navigate", modifier = Modifier.size(18.dp))
+                    }
                 }
-            }
-            Spacer(Modifier.height(4.dp))
-            Text(review.text, style = MaterialTheme.typography.bodySmall, lineHeight = 18.sp)
-        }
-    }
-}
-
-@Composable
-fun Counter(
-    label: String,
-    value: Int,
-    onIncrement: () -> Unit,
-    onDecrement: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Column(modifier) {
-        Text(label, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(bottom = 4.dp))
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                .padding(4.dp)
-        ) {
-            IconButton(onClick = onDecrement) {
-                Text("-", style = MaterialTheme.typography.titleLarge)
-            }
-            Text(value.toString(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            IconButton(onClick = onIncrement) {
-                Text("+", style = MaterialTheme.typography.titleLarge)
             }
         }
     }

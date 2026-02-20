@@ -1,5 +1,7 @@
 package com.example.stayease.feature.auth
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -13,13 +15,18 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SupportScreen(onBack: () -> Unit) {
     val scrollState = rememberScrollState()
+    val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     Scaffold(
         topBar = {
@@ -31,7 +38,8 @@ fun SupportScreen(onBack: () -> Unit) {
                     }
                 }
             )
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         Column(
             modifier = Modifier
@@ -48,13 +56,13 @@ fun SupportScreen(onBack: () -> Unit) {
                 modifier = Modifier.size(80.dp),
                 tint = MaterialTheme.colorScheme.primary
             )
-            
+
             Text(
                 "How can we help you?",
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold
             )
-            
+
             Text(
                 "Our team is available 24/7 to assist you with your bookings and inquiries.",
                 style = MaterialTheme.typography.bodyLarge,
@@ -68,18 +76,30 @@ fun SupportScreen(onBack: () -> Unit) {
                 icon = Icons.Default.Phone,
                 title = "Call Us",
                 subtitle = "+1 (800) STAY-EASE",
-                onClick = { /* TODO: Launch dialer */ }
+                onClick = {
+                    val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:+18007829327"))
+                    context.startActivity(intent)
+                }
             )
 
             SupportActionCard(
                 icon = Icons.Default.Email,
                 title = "Email Us",
                 subtitle = "support@stayease.com",
-                onClick = { /* TODO: Launch email client */ }
+                onClick = {
+                    val intent = Intent(Intent.ACTION_SENDTO).apply {
+                        data = Uri.parse("mailto:support@stayease.com")
+                    }
+                    context.startActivity(intent)
+                }
             )
 
             OutlinedButton(
-                onClick = { /* TODO: FAQ */ },
+                onClick = {
+                    scope.launch {
+                        snackbarHostState.showSnackbar("FAQ section is coming soon!")
+                    }
+                },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp)
             ) {
