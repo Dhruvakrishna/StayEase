@@ -87,6 +87,7 @@ dependencies {
   implementation(project(":feature:hotels"))
   implementation(project(":feature:details"))
   implementation(project(":feature:bookings"))
+  implementation(project(":feature:asyncdemo"))
 
   val composeBom = platform("androidx.compose:compose-bom:2025.01.00")
   implementation(composeBom)
@@ -97,7 +98,10 @@ dependencies {
   implementation("androidx.compose.ui:ui-tooling-preview")
   debugImplementation("androidx.compose.ui:ui-tooling")
   implementation("androidx.compose.material3:material3:1.3.1")
+  implementation("androidx.compose.material:material-icons-extended")
   implementation("androidx.navigation:navigation-compose:2.8.6")
+
+  implementation("org.osmdroid:osmdroid-android:6.1.18")
 
   implementation("com.google.dagger:hilt-android:2.52")
   kapt("com.google.dagger:hilt-android-compiler:2.52")

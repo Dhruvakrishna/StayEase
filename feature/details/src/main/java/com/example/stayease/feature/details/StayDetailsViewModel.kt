@@ -1,4 +1,5 @@
 package com.example.stayease.feature.details
+
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -18,7 +19,7 @@ data class DetailsUiState(
   val loading: Boolean = true,
   val stay: Stay? = null,
   val error: String? = null,
-  val checkInEpochDay: Long = 20000,
+  val checkInEpochDay: Long = System.currentTimeMillis() / (24 * 60 * 60 * 1000),
   val nights: Int = 2,
   val guests: Int = 2,
   val rooms: Int = 1,
@@ -46,6 +47,10 @@ class StayDetailsViewModel @Inject constructor(
         is AppResult.Err -> _state.value = _state.value.copy(loading = false, error = "Could not load details.")
       }
     }
+  }
+
+  fun setCheckInDate(epochDay: Long) {
+    _state.value = _state.value.copy(checkInEpochDay = epochDay)
   }
 
   fun incNights() { _state.value = _state.value.copy(nights = (_state.value.nights + 1).coerceAtMost(14)) }

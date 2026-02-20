@@ -36,6 +36,9 @@ dependencies {
   kapt("com.google.dagger:hilt-android-compiler:2.52")
 
   implementation("com.google.android.gms:play-services-location:21.3.0")
+  
+  // Security for EncryptedSharedPreferences
+  implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
   testImplementation("junit:junit:4.13.2")
   testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")

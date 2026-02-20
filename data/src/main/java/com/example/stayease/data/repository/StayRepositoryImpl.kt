@@ -8,7 +8,6 @@ import androidx.paging.map
 import com.example.stayease.core.result.AppResult
 import com.example.stayease.core.result.safeCall
 import com.example.stayease.data.local.AppDatabase
-import com.example.stayease.data.local.dao.StayDao
 import com.example.stayease.data.local.entity.StayEntity
 import com.example.stayease.data.remote.api.OverpassApi
 import com.example.stayease.data.remote.mapper.toStay
@@ -27,61 +26,66 @@ class StayRepositoryImpl @Inject constructor(
 
     private val dao = db.stayDao()
 
+    // Cache last pivot and radius to avoid redundant calls
+    private var lastPivot: GeoPoint? = null
+    private var lastRadius: Int = 0
+
     @OptIn(ExperimentalPagingApi::class)
     override fun staysNear(pivot: GeoPoint, radiusMeters: Int, pageSize: Int): Flow<PagingData<Stay>> {
-        // Feature: Offline-First Strategy
-        // We use RemoteMediator to ensure that the local database is the Single Source of Truth.
-        // The UI observes the DB, and the Mediator handles fetching from network when needed.
+        // Update cache tracking
+        lastPivot = pivot
+        lastRadius = radiusMeters
+
         return Pager(
             config = PagingConfig(
                 pageSize = pageSize,
                 enablePlaceholders = false,
-                initialLoadSize = pageSize
+                initialLoadSize = pageSize * 2,
+                prefetchDistance = pageSize
             ),
             remoteMediator = StaysRemoteMediator(api, db, pivot, radiusMeters),
             pagingSourceFactory = { dao.pagingSource() }
         ).flow.map { pagingData ->
-            pagingData.map { entity ->
-                Stay(
-                    entity.id, entity.name, entity.category, entity.rating,
-                    entity.address, GeoPoint(entity.lat, entity.lon),
-                    entity.nightlyPriceUsdEstimate
-                )
-            }
+            pagingData.map { it.toDomain() }
         }
     }
 
     override suspend fun getStayDetails(id: Long): AppResult<Stay> = safeCall {
-        // Check cache first - classic offline-first move.
         val cached = dao.getStay(id)
-        if (cached != null) {
-            return@safeCall Stay(
-                cached.id, cached.name, cached.category, cached.rating,
-                cached.address, GeoPoint(cached.lat, cached.lon),
-                cached.nightlyPriceUsdEstimate
-            )
+        if (cached != null && cached.imageUrls.isNotEmpty()) {
+            return@safeCall cached.toDomain()
         }
         
-        // If not found, we fetch and update cache.
-        // In a real app, this might be triggered by the Mediator, but here we provide a direct path.
-        refreshCache(GeoPoint(41.8781, -87.6298), 2500, 40)
+        // Only refresh if we have location info
+        val pivot = lastPivot ?: GeoPoint(41.8781, -87.6298)
+        val radius = lastRadius.takeIf { it > 0 } ?: 2500
+
+        refreshCache(pivot, radius, 40)
         val after = dao.getStay(id) ?: throw IllegalStateException("Stay not found even after refresh")
-        Stay(
-            after.id, after.name, after.category, after.rating,
-            after.address, GeoPoint(after.lat, after.lon),
-            after.nightlyPriceUsdEstimate
-        )
+        after.toDomain()
     }
 
     override suspend fun refreshCache(pivot: GeoPoint, radiusMeters: Int, limit: Int): AppResult<Unit> = safeCall {
         val res = api.query(staysAround(pivot, radiusMeters))
         val stays = res.elements.mapNotNull { it.toStay() }.distinctBy { it.id }.take(limit)
-        val entities = stays.map { s ->
-            StayEntity(
-                s.id, s.name, s.category, s.rating, s.address,
-                s.location.lat, s.location.lon, s.nightlyPriceUsdEstimate
-            )
-        }
-        db.stayDao().upsertAll(entities)
+        val entities = stays.map { it.toEntity() }
+        dao.upsertAll(entities)
     }
+
+    override suspend fun toggleFavorite(id: Long): AppResult<Unit> = safeCall {
+        dao.toggleFavorite(id)
+    }
+
+    override fun observeFavorites(): Flow<List<Stay>> =
+        dao.observeFavorites().map { entities -> entities.map { it.toDomain() } }
+
+    private fun StayEntity.toDomain() = Stay(
+        id, name, category, rating, address, GeoPoint(lat, lon),
+        nightlyPriceUsdEstimate, thumbnailUrl, imageUrls, amenities, reviews, isFavorite, description
+    )
+
+    private fun Stay.toEntity() = StayEntity(
+        id, name, category, rating, address, location.lat, location.lon,
+        nightlyPriceUsdEstimate, thumbnailUrl, imageUrls, amenities, reviews, isFavorite, description
+    )
 }
